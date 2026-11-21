@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Torrent Pharmaceuticals — Advanced Stock Dashboard</title>
+<script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --teal2:#0d9488;--teal:#06b6d4;
+  --green:#10b981;--red:#ef4444;
+  --blue:#3b82f6;--purple:#8b5cf6;
+  --gold:#f59e0b;--gold2:#d97706;
+  --background:#0b0e14;
+  --foreground:#e7e9ee;
+  --muted-foreground:#8b93a3;
+  --card:#12161f;
+  --border:rgba(255,255,255,.08);
+  --primary:#06b6d4;
+  --primary-foreground:#ffffff;
+}
+body{background:var(--background);color:var(--foreground);font-family:inherit;min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
+
+.glass{background:var(--card);border:1px solid var(--border);border-radius:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+.glass-inner{background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;}
+
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.4)}}
+@keyframes price-flash{0%{background:rgba(6,182,212,.25)}100%{background:transparent}}
+@keyframes ticker-scroll{0%{transform:translateX(100%)}100%{transform:translateX(-100%)}}
+@keyframes glow-teal{0%,100%{box-shadow:0 0 8px rgba(6,182,212,.35)}50%{box-shadow:0 0 22px rgba(6,182,212,.75)}}
+@keyframes slide-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes flicker{0%,100%{opacity:1}50%{opacity:.6}}
+
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-dot 1.4s ease-in-out infinite;box-shadow:0 0 6px var(--green);}
+.price-flash{animation:price-flash .6s ease-out forwards;}
+
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px;position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s;cursor:default;}
+.kpi:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,0,0,.18);}
+.kpi-accent{position:absolute;top:0;right:0;width:60px;height:60px;border-radius:0 14px 0 60px;opacity:.15;}
+.kpi-label{font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted-foreground);margin-bottom:4px;}
+.kpi-value{font-size:22px;font-weight:800;line-height:1.1;color:var(--foreground);}
+.kpi-sub{font-size:11.5px;color:var(--muted-foreground);margin-top:3px;}
+.kpi-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:99px;font-size:11px;font-weight:700;margin-top:4px;}
+.up{color:var(--green)}.dn{color:var(--red)}
+.badge-up{background:rgba(16,185,129,.12);color:var(--green);}
+.badge-dn{background:rgba(239,68,68,.12);color:var(--red);}
+
+.tabs{display:flex;gap:4px;background:rgba(0,0,0,.08);border-radius:10px;padding:3px;}
+.tab{padding:6px 14px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--muted-foreground);transition:all .2s;white-space:nowrap;}
+.tab.active{background:var(--primary);color:var(--primary-foreground);box-shadow:0 2px 8px rgba(6,182,212,.3);}
+
+.section-title{font-size:14px;font-weight:700;color:var(--foreground);display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+.stag{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;font-size:11px;}
+
+#chartTooltip,#candleTooltip,#quarterTip,#annualTip,#ratioTip{
+  position:fixed;background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:10px 14px;font-size:12px;pointer-events:none;
+  z-index:999;box-shadow:0 8px 32px rgba(0,0,0,.25);display:none;
+  min-width:140px;line-height:1.6;
+}
+
+.ticker-bar{overflow:hidden;white-space:nowrap;background:rgba(0,0,0,.06);border-top:1px solid var(--border);border-bottom:1px solid var(--border);height:30px;display:flex;align-items:center;}
+.ticker-inner{display:inline-flex;gap:40px;animation:ticker-scroll 70s linear infinite;padding-left:100%;}
+.ticker-item{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:500;}
+
+.sig{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700;letter-spacing:.04em;}
+.sig-bull{background:rgba(16,185,129,.15);color:var(--green);border:1px solid rgba(16,185,129,.3);}
+.sig-bear{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);}
+
+.pc-item{display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:8px;font-size:12.5px;margin-bottom:6px;}
+.pc-icon{width:18px;height:18px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;margin-top:1px;}
+.pros .pc-icon{background:rgba(16,185,129,.2);color:var(--green);}
+.cons .pc-icon{background:rgba(239,68,68,.2);color:var(--red);}
+.pros .pc-item{background:rgba(16,185,129,.05);border:1px solid rgba(16,185,129,.15);}
+.cons .pc-item{background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.15);}
+
+.err-bar{height:6px;border-radius:99px;background:var(--border);overflow:hidden;margin-bottom:10px;}
+.err-fill{height:100%;border-radius:99px;transition:width 1.5s cubic-bezier(.25,.46,.45,.94);}
+
+.ftable{width:100%;border-collapse:separate;border-spacing:0;font-size:12.5px;}
+.ftable th{padding:8px 10px;text-align:left;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);background:rgba(0,0,0,.04);border-bottom:1px solid var(--border);}
+.ftable td{padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.ftable tbody tr:last-child td{border-bottom:none;}
+.ftable tbody tr:hover td{background:rgba(255,255,255,.03);}
+
+.candle-stat{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;}
+.candle-stat span:nth-child(odd){color:var(--muted-foreground);font-size:11px;}
+.candle-stat span:nth-child(even){font-weight:600;font-size:12px;}
+
+canvas{display:block;}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.sparkline-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.spark-item{background:rgba(0,0,0,.05);border:1px solid var(--border);border-radius:8px;padding:8px 12px;flex:1;min-width:100px;}
+.spark-label{font-size:10px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.06em;}
+.spark-val{font-size:16px;font-weight:700;margin-top:2px;}
+
+.g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.wrap{max-width:1500px;margin:0 auto;padding:16px;}
+
+@media(max-width:1200px){.g4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:700px){.g4{grid-template-columns:1fr}.g2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<header class="glass" style="border-radius:0;border-left:none;border-right:none;border-top:none;position:sticky;top:0;z-index:100;padding:0;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;flex-wrap:wrap;gap:12px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <div style="width:46px;height:46px;background:linear-gradient(135deg,#06b6d4,#0d9488);border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;font-size:12px;letter-spacing:-.5px;box-shadow:0 4px 15px rgba(6,182,212,.45);animation:glow-teal 3s ease-in-out infinite;">TRP</div>
+      <div>
+        <div style="font-size:18px;font-weight:800;color:var(--foreground);">Torrent Pharmaceuticals Ltd</div>
+        <div style="font-size:11px;color:var(--muted-foreground);display:flex;align-items:center;gap:8px;">
+          <span>NSE: TORNTPHARM</span><span style="opacity:.4;">·</span>
+          <span>BSE: 500420</span><span style="opacity:.4;">·</span>
+          <span>Pharmaceuticals</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+      <div id="marketStatus" style="display:flex;align-items:center;gap:6px;">
+        <div class="live-dot" id="liveDot"></div>
+        <span id="marketStatusText" style="font-size:11px;font-weight:600;"></span>
+      </div>
+      <div id="priceBlock" style="text-align:right;">
+        <div style="display:flex;align-items:baseline;gap:6px;">
+          <span style="font-size:11px;color:var(--muted-foreground);">&#8377;</span>
+          <span id="livePrice" style="font-size:32px;font-weight:900;color:var(--teal);letter-spacing:-1px;transition:color .3s;">3,247.50</span>
+          <span id="priceArrow" style="font-size:16px;font-weight:700;">&#9650;</span>
+          <span id="priceChgPct" style="font-size:14px;font-weight:700;">+1.82%</span>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:2px;">
+          <span style="font-size:11px;color:var(--muted-foreground);">Chg: <span id="priceChgAbs" style="font-weight:600;">+58.10</span></span>
+          <span style="font-size:11px;color:var(--muted-foreground);">Vol: <span id="liveVol" style="font-weight:600;">487K</span></span>
+          <span style="font-size:11px;color:var(--muted-foreground);" id="lastUpdated"></span>
+        </div>
+      </div>
+      <div class="glass-inner" style="padding:8px 14px;border-radius:10px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);margin-bottom:4px;">Today's Range</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px;min-width:220px;">
+          <div><div style="font-size:9.5px;color:var(--muted-foreground);">OPEN</div><div id="todayOpen" style="font-size:13px;font-weight:700;">3,190.00</div></div>
+          <div><div style="font-size:9.5px;color:var(--green);">HIGH</div><div id="todayHigh" style="font-size:13px;font-weight:700;color:var(--green);">3,264.80</div></div>
+          <div><div style="font-size:9.5px;color:var(--red);">LOW</div><div id="todayLow" style="font-size:13px;font-weight:700;color:var(--red);">3,181.45</div></div>
+          <div><div style="font-size:9.5px;color:var(--muted-foreground);">PREV</div><div id="todayPrev" style="font-size:13px;font-weight:700;">3,189.40</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="ticker-bar">
+    <div class="ticker-inner" id="tickerInner"></div>
+  </div>
+</header>
+
+<div id="chartTooltip"></div>
+<div id="candleTooltip"></div>
+<div id="quarterTip"></div>
+<div id="annualTip"></div>
+<div id="ratioTip"></div>
+
+<div class="wrap">
+
+  <div class="g4" style="margin-bottom:14px;animation:slide-in .4s ease;">
+    <div class="kpi"><div class="kpi-accent" style="background:var(--teal);"></div><div class="kpi-label">Market Cap</div><div class="kpi-value" style="color:var(--teal);">&#8377;1,09,846 Cr</div><div class="kpi-badge badge-up">&#9650; +18.4% (1Y)</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--green);"></div><div class="kpi-label">Revenue (TTM)</div><div class="kpi-value" style="color:var(--green);">&#8377;11,742 Cr</div><div class="kpi-sub">Net Profit: &#8377;2,148 Cr</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--blue);"></div><div class="kpi-label">P/E &amp; Book Value</div><div class="kpi-value">51.1x</div><div class="kpi-sub">Book Val: &#8377;442 | P/B: 7.35x</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--purple);"></div><div class="kpi-label">52 Week Range</div><div class="kpi-value">&#8377;2,362 &ndash; <span style="color:var(--green);">&#8377;3,598</span></div><div class="kpi-sub">ROCE: 22.4% | ROE: 18.9%</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--teal);"></div><div class="kpi-label">Profit CAGR 5Y</div><div class="kpi-value" style="color:var(--teal);">24.7%</div><div class="kpi-sub">Sales CAGR 5Y: 13.2%</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--gold);"></div><div class="kpi-label">Promoter Holding</div><div class="kpi-value" style="color:var(--gold);">71.25%</div><div class="kpi-badge badge-up">&#9650; +0.12% last QTR</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--green);"></div><div class="kpi-label">Dividend Yield</div><div class="kpi-value">1.08%</div><div class="kpi-sub">Div: &#8377;35/share (FY26)</div></div>
+    <div class="kpi"><div class="kpi-accent" style="background:var(--blue);"></div><div class="kpi-label">Debt / Equity</div><div class="kpi-value" style="color:var(--green);">0.38x</div><div class="kpi-sub">Interest FY26: &#8377;215 Cr</div></div>
+  </div>
+
+  <div style="margin-bottom:14px;">
+    <div class="glass" style="padding:16px;">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="stag" style="background:rgba(6,182,212,.15);color:var(--teal);">&#128200;</span>
+          Intraday Price Chart &mdash; Today (7 Sep 2026)
+          <span style="margin-left:8px;" id="intradayStatus"></span>
+        </div>
+        <div class="tabs" id="intradayTabs">
+          <button class="tab active" onclick="switchIntraday('1D',this)">1D</button>
+          <button class="tab" onclick="switchIntraday('5D',this)">5D</button>
+          <button class="tab" onclick="switchIntraday('1M',this)">1M</button>
+          <button class="tab" onclick="switchIntraday('3M',this)">3M</button>
+          <button class="tab" onclick="switchIntraday('1Y',this)">1Y</button>
+        </div>
+      </div>
+      <div style="position:relative;">
+        <canvas id="intradayChart" style="cursor:crosshair;"></canvas>
+        <div id="intradayCrosshair" style="position:absolute;top:0;left:0;width:1px;height:100%;background:rgba(6,182,212,.4);pointer-events:none;display:none;"></div>
+        <div id="intradayHorzLine" style="position:absolute;left:0;right:0;height:1px;background:rgba(6,182,212,.3);pointer-events:none;display:none;"></div>
+      </div>
+      <div class="sparkline-row">
+        <div class="spark-item"><div class="spark-label">Day Open</div><div class="spark-val" id="si-open">&#8377;3,190</div></div>
+        <div class="spark-item"><div class="spark-label">Day High</div><div class="spark-val" style="color:var(--green);" id="si-high">&#8377;3,264</div></div>
+        <div class="spark-item"><div class="spark-label">Day Low</div><div class="spark-val" style="color:var(--red);" id="si-low">&#8377;3,181</div></div>
+        <div class="spark-item"><div class="spark-label">Current</div><div class="spark-val" style="color:var(--teal);" id="si-cur">&#8377;3,247</div></div>
+        <div class="spark-item"><div class="spark-label">Volume</div><div class="spark-val" id="si-vol">487K</div></div>
+        <div class="spark-item"><div class="spark-label">Chg%</div><div class="spark-val up" id="si-chg">+1.82%</div></div>
+        <div class="spark-item"><div class="spark-label">Avg Price</div><div class="spark-val" id="si-avg">&#8377;3,223</div></div>
+        <div class="spark-item"><div class="spark-label">Market Cap</div><div class="spark-val" id="si-mcap">&#8377;1,09,846 Cr</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass" style="padding:16px;margin-bottom:14px;">
+    <div class="section-header">
+      <div class="section-title">
+        <span class="stag" style="background:rgba(59,130,246,.15);color:var(--blue);">&#128302;</span>
+        ARIMA(2,1,2) Price Forecast
+        <span style="font-size:11px;font-weight:400;color:var(--muted-foreground);">Hover for date &amp; price</span>
+      </div>
+      <div class="tabs" id="forecastTabs">
+        <button class="tab active" onclick="switchForecast('1m',this)">1 Month</button>
+        <button class="tab" onclick="switchForecast('6m',this)">6 Months</button>
+        <button class="tab" onclick="switchForecast('1y',this)">1 Year</button>
+        <button class="tab" onclick="switchForecast('3y',this)">3 Years</button>
+      </div>
+    </div>
+    <div style="position:relative;"><canvas id="forecastChart" style="cursor:crosshair;"></canvas></div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-size:12px;color:var(--muted-foreground);">
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:18px;height:3px;background:var(--teal);border-radius:2px;display:inline-block;"></span>Historical</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:18px;height:0;border-top:2.5px dashed var(--blue);display:inline-block;"></span>ARIMA Forecast</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:18px;height:8px;background:rgba(59,130,246,.15);border-radius:3px;display:inline-block;"></span>95% CI Band</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--green);display:inline-block;"></span>Support &#8377;2,900&ndash;3,050</span>
+      <span style="display:flex;align-items:center;gap:5px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--red);display:inline-block;"></span>Resistance &#8377;3,500&ndash;3,598</span>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:14px;">
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(16,185,129,.15);color:var(--green);">&#128202;</span>Quarterly Performance (&#8377; Cr)</div>
+      <div style="position:relative;"><canvas id="quarterChart" style="cursor:crosshair;"></canvas></div>
+    </div>
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(139,92,246,.15);color:var(--purple);">&#9889;</span>ARIMA Error Detection &amp; Model Health</div>
+      <div id="errorPanel"></div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:14px;">
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(59,130,246,.15);color:var(--blue);">&#128201;</span>Annual Revenue vs Net Profit (&#8377; Cr)</div>
+      <div style="position:relative;"><canvas id="annualChart" style="cursor:crosshair;"></canvas></div>
+    </div>
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(6,182,212,.15);color:var(--teal);">&#127919;</span>ARIMA Forecast Summary Table</div>
+      <div id="forecastTable"></div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:14px;">
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(6,182,212,.15);color:var(--teal);">&#128208;</span>Key Financial Ratios Trend</div>
+      <div style="position:relative;"><canvas id="ratioChart" style="cursor:crosshair;"></canvas></div>
+      <div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px;color:var(--muted-foreground);">
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--teal);border-radius:2px;display:inline-block;"></span>OPM%</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--blue);border-radius:2px;display:inline-block;"></span>NPM%</span>
+        <span style="display:flex;align-items:center;gap:5px;"><span style="width:14px;height:3px;background:var(--purple);border-radius:2px;display:inline-block;"></span>ROE%</span>
+      </div>
+    </div>
+    <div class="glass" style="padding:16px;">
+      <div class="section-title"><span class="stag" style="background:rgba(16,185,129,.15);color:var(--green);">&#9878;&#65039;</span>Strengths &amp; Risk Analysis</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">&#9679; Strengths</div>
+          <div class="pros">
+            <div class="pc-item"><div class="pc-icon">&#10003;</div>Consistent 5Y profit CAGR of 24.7%</div>
+            <div class="pc-item"><div class="pc-icon">&#10003;</div>71.25% promoter holding &mdash; high conviction</div>
+            <div class="pc-item"><div class="pc-icon">&#10003;</div>Diversified: India, US, Germany, Brazil</div>
+            <div class="pc-item"><div class="pc-icon">&#10003;</div>OPM improving: 20% &#8594; 24% &#8594; 28%</div>
+            <div class="pc-item"><div class="pc-icon">&#10003;</div>Strong branded generics pipeline in India</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">&#9679; Risks</div>
+          <div class="cons">
+            <div class="pc-item"><div class="pc-icon">&#10007;</div>US price erosion on generic formulations</div>
+            <div class="pc-item"><div class="pc-icon">&#10007;</div>High valuation &mdash; P/E of 51x limits upside</div>
+            <div class="pc-item"><div class="pc-icon">&#10007;</div>USFDA inspection risk across facilities</div>
+            <div class="pc-item"><div class="pc-icon">&#10007;</div>Currency headwinds on export revenues</div>
+            <div class="pc-item"><div class="pc-icon">&#10007;</div>Debt/equity at 0.38x &mdash; moderately leveraged</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;padding:14px 20px;color:var(--muted-foreground);font-size:11px;border-top:1px solid var(--border);background:var(--card);">
+  <strong>Torrent Pharmaceuticals Stock Dashboard</strong> &middot; Data: Public / Screener.in &middot; Live price: Simulated &middot; ARIMA model: Client-side JS &middot;
+  <span style="color:var(--red);">&#9888; Not financial advice</span>
+</div>
+
+<script>
+'use strict';
+const FG    = () => 'rgba(255,255,255,.85)';
+const FGMID = () => 'rgba(255,255,255,.5)';
+const FGDIM = () => 'rgba(255,255,255,.18)';
+const GRID  = () => 'rgba(255,255,255,.06)';
+
+const PREV_CLOSE = 3189.40;
+const BASE_PRICE = 3247.50;
+
+const MON_LABELS = [
+  'Jan 23','Feb 23','Mar 23','Apr 23','May 23','Jun 23',
+  'Jul 23','Aug 23','Sep 23','Oct 23','Nov 23','Dec 23',
+  'Jan 24','Feb 24','Mar 24','Apr 24','May 24','Jun 24',
+  'Jul 24','Aug 24','Sep 24','Oct 24','Nov 24','Dec 24',
+  'Jan 25','Feb 25','Mar 25','Apr 25','May 25','Jun 25',
+  'Jul 25','Aug 25','Sep 25','Oct 25','Nov 25','Dec 25',
+  'Jan 26','Feb 26','Mar 26','Apr 26','May 26','Jun 26',
+  'Jul 26','Aug 26','Sep 26'
+];
+const MON_PRICES = [
+  1820,1870,1910,1880,1950,2010,
+  2080,2145,2090,2170,2250,2380,
+  2440,2510,2480,2560,2610,2720,
+  2680,2740,2800,2760,2830,2950,
+  2990,3050,2980,3060,3120,3080,
+  3150,3240,3180,3260,3310,3280,
+  3350,3420,3380,3460,3520,3490,
+  3560,3598,3247.50
+];
+
+function genIntraday(){
+  const times=[],opens=[],highs=[],lows=[],closes=[],vols=[];
+  let p=PREV_CLOSE,h=9,m=15;
+  for(let i=0;i<75;i++){
+    times.push(String(h).padStart(2,'0')+':'+String(m).padStart(2,'0'));
+    const o=p,move=(Math.random()-.48)*12,noise=Math.random()*6;
+    const c=Math.max(o+move,500);
+    const hi=Math.max(o,c)+noise*Math.random();
+    const lo=Math.min(o,c)-noise*Math.random()*.5;
+    opens.push(+o.toFixed(2));highs.push(+hi.toFixed(2));lows.push(+lo.toFixed(2));closes.push(+c.toFixed(2));
+    vols.push(Math.floor(3000+Math.random()*10000));
+    p=c;m+=5;if(m>=60){m=0;h++;}
+  }
+  const scale=BASE_PRICE/closes[closes.length-1];
+  return{times,opens:opens.map(v=>+(v*scale).toFixed(2)),highs:highs.map(v=>+(v*scale+8).toFixed(2)),
+    lows:lows.map(v=>+(Math.max(v*scale-8,PREV_CLOSE*.97)).toFixed(2)),closes:closes.map(v=>+(v*scale).toFixed(2)),vols};
+}
+const INTRADAY=genIntraday();
+
+function gen5Day(){
+  const d=[],prices=[];
+  const days=['03 Sep','04 Sep','05 Sep','06 Sep','07 Sep'];
+  let base=3100;
+  days.forEach(day=>{
+    let p=base;
+    for(let i=0;i<75;i++){
+      const c=+(p+(Math.random()-.47)*10).toFixed(2);
+      d.push(day+' '+String(9+Math.floor((i*5+15)/60)).padStart(2,'0')+':'+String((i*5+15)%60).padStart(2,'0'));
+      prices.push(Math.max(c,500));p=c;
+    }
+    base=p;
+  });
+  return{labels:d,prices};
+}
+const FIVE_DAY=gen5Day();
+
+const ANN_YRS=['FY15','FY16','FY17','FY18','FY19','FY20','FY21','FY22','FY23','FY24','FY25','FY26'];
+const ANN_SAL=[4891,5498,6198,7012,7416,7820,7982,8413,9246,9896,10814,11742];
+const ANN_PRF=[512,548,621,712,716,742,748,786,982,1148,1876,2148];
+
+const Q_LABS=['Jun23','Sep23','Dec23','Mar24','Jun24','Sep24','Dec24','Mar25','Jun25','Sep25','Dec25','Mar26','Jun26'];
+const Q_SAL=[2124,2246,2318,2542,2610,2728,2748,2824,2840,2912,2960,3042,2985];
+const Q_PRF=[218,240,258,292,308,326,348,482,498,518,526,534,548];
+
+const OPM=[20.1,19.8,20.5,21.3,21.8,22.4,22.8,23.4,24.2,25.1,27.4,28.2];
+const NPM=[10.5,9.97,10.0,10.2,9.65,9.49,9.37,9.34,10.6,11.6,17.3,18.3];
+const ROE=[13.2,14.1,15.0,15.6,14.8,14.4,13.9,14.2,16.1,17.2,18.5,18.9];
+
+function arima(series,p,d,q,steps){
+  let s=series.slice();
+  for(let i=0;i<d;i++)s=s.slice(1).map((v,k)=>v-s[k]);
+  const n=s.length,mu=s.reduce((a,b)=>a+b,0)/n;
+  let ar=Array.from({length:p},(_,i)=>0.5/(i+1));
+  let ma=Array.from({length:q},(_,i)=>0.2/(i+1));
+  const arS=ar.reduce((a,b)=>a+Math.abs(b),0);
+  if(arS>.9)ar=ar.map(c=>c*.85/arS);
+  const fitted=[],errors=new Array(n).fill(0);
+  for(let t=0;t<n;t++)fitted.push(mu);
+  for(let t=Math.max(p,q);t<n;t++){
+    let pr=mu*(1-ar.reduce((a,b)=>a+b,0));
+    for(let i=0;i<p;i++)pr+=ar[i]*(s[t-1-i]-mu);
+    for(let i=0;i<q;i++)pr+=ma[i]*errors[t-1-i];
+    fitted[t]=pr;errors[t]=s[t]-pr;
+  }
+  const ext=[...s],extE=[...errors],fc=[];
+  for(let step=0;step<steps;step++){
+    let pr=mu*(1-ar.reduce((a,b)=>a+b,0));
+    for(let i=0;i<p;i++){const idx=ext.length-1-i;if(idx>=0)pr+=ar[i]*(ext[idx]-mu);}
+    for(let i=0;i<q;i++){const idx=extE.length-1-i;if(idx>=0)pr+=ma[i]*extE[idx];}
+    fc.push(pr);ext.push(pr);extE.push(0);
+  }
+  const last=series[series.length-1];
+  let res=[last,...fc];
+  for(let i=0;i<d;i++){const nr=[];for(let k=1;k<res.length;k++)nr.push(res[k]+res[k-1]);res=[last,...nr];}
+  const fcast=res.slice(1);
+  const vr=errors.slice(Math.max(p,q));
+  const rmse=Math.sqrt(vr.reduce((a,b)=>a+b*b,0)/vr.length);
+  const mae=vr.reduce((a,b)=>a+Math.abs(b),0)/vr.length;
+  const mape=Math.min(series.slice(Math.max(p,q)).reduce((a,v,i)=>a+Math.abs((v-(fitted[Math.max(p,q)+i]||0))/v),0)/series.slice(Math.max(p,q)).length*100,99);
+  return{fcast,rmse,mae,mape,errors:vr};
+}
+
+function getCI(fc,errors){
+  const std=Math.sqrt(errors.reduce((a,b)=>a+b*b,0)/errors.length);
+  return fc.map((v,i)=>({lo:Math.max(v-1.96*std*Math.sqrt(i+1),100),hi:v+1.96*std*Math.sqrt(i+1)}));
+}
+
+const FC={
+  '1m':arima(MON_PRICES,2,1,2,1),'6m':arima(MON_PRICES,2,1,2,6),
+  '1y':arima(MON_PRICES,2,1,2,12),'3y':arima(MON_PRICES,2,1,2,36),
+};
+
+function futureLabels(steps){
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const labels=[];let d=new Date(2026,8,7);
+  for(let i=0;i<steps;i++){d.setMonth(d.getMonth()+1);labels.push(months[d.getMonth()]+' '+d.getFullYear());}
+  return labels;
+}
+
+let livePrice=BASE_PRICE;
+const priceHistory=[];
+
+function updateLivePrice(){
+  const volatility=0.008,drift=0.0003;
+  const r=(Math.random()-.5)*2;
+  livePrice=Math.max(livePrice*Math.exp(drift+volatility*r),800);
+  livePrice=+livePrice.toFixed(2);
+  const chg=livePrice-PREV_CLOSE,pct=(chg/PREV_CLOSE*100).toFixed(2),up=chg>=0;
+  const el=document.getElementById('livePrice');
+  el.textContent=livePrice.toLocaleString('en-IN',{maximumFractionDigits:2});
+  el.style.color=up?'var(--teal)':'var(--red)';
+  el.closest('#priceBlock').classList.remove('price-flash');
+  void el.closest('#priceBlock').offsetWidth;
+  el.closest('#priceBlock').classList.add('price-flash');
+  document.getElementById('priceArrow').textContent=up?'\u25b2':'\u25bc';
+  document.getElementById('priceArrow').className=up?'up':'dn';
+  document.getElementById('priceChgPct').textContent=(up?'+':'')+pct+'%';
+  document.getElementById('priceChgPct').className=up?'up':'dn';
+  document.getElementById('priceChgAbs').textContent=(up?'+':'')+chg.toFixed(2);
+  document.getElementById('priceChgAbs').style.color=up?'var(--green)':'var(--red)';
+  const now=new Date();
+  document.getElementById('lastUpdated').textContent=now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:true});
+  const ch=document.getElementById('todayHigh'),cl=document.getElementById('todayLow');
+  const curH=parseFloat(ch.textContent.replace(/,/g,'')),curL=parseFloat(cl.textContent.replace(/,/g,''));
+  if(livePrice>curH){ch.textContent=livePrice.toLocaleString('en-IN',{maximumFractionDigits:2});document.getElementById('si-high').textContent='\u20b9'+livePrice.toLocaleString('en-IN',{maximumFractionDigits:0});}
+  if(livePrice<curL){cl.textContent=livePrice.toLocaleString('en-IN',{maximumFractionDigits:2});document.getElementById('si-low').textContent='\u20b9'+livePrice.toLocaleString('en-IN',{maximumFractionDigits:0});}
+  document.getElementById('si-cur').textContent='\u20b9'+livePrice.toLocaleString('en-IN',{maximumFractionDigits:0});
+  document.getElementById('si-chg').textContent=(up?'+':'')+pct+'%';
+  document.getElementById('si-chg').className='spark-val '+(up?'up':'dn');
+  priceHistory.push({t:now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}),p:livePrice});
+  if(priceHistory.length>60)priceHistory.shift();
+  const vol=440000+Math.floor(Math.random()*100000);
+  const vs=(vol/1000).toFixed(0)+'K';
+  document.getElementById('liveVol').textContent=vs;
+  document.getElementById('si-vol').textContent=vs;
+  const shares=33800000;
+  const mcap=((livePrice*shares)/1e7).toFixed(0);
+  document.getElementById('si-mcap').textContent='\u20b9'+parseInt(mcap).toLocaleString('en-IN')+' Cr';
+}
+
+function setupMarketStatus(){
+  const el=document.getElementById('marketStatusText'),dot=document.getElementById('liveDot');
+  el.textContent='SIMULATED LIVE';el.style.color='var(--teal)';
+  dot.style.background='var(--teal)';dot.style.boxShadow='0 0 6px var(--teal)';
+  document.getElementById('intradayStatus').innerHTML='<span style="font-size:11px;font-weight:600;color:var(--teal);background:rgba(6,182,212,.12);padding:2px 8px;border-radius:99px;border:1px solid rgba(6,182,212,.3);">&#128309; Market Simulated &mdash; Updates Every 2s</span>';
+}
+
+const PEERS=[
+  {sym:'SUNPHARMA',p:1842,c:+0.94},{sym:'CIPLA',p:1628,c:-0.41},{sym:'DRREDDY',p:6240,c:+1.12},
+  {sym:'LUPIN',p:2148,c:+0.72},{sym:'DIVISLAB',p:4980,c:-0.28},{sym:'AUROPHARMA',p:1285,c:+1.36},
+  {sym:'ALKEM',p:5240,c:-0.18},{sym:'ABBOTTINDIA',p:28450,c:+0.54},
+  {sym:'NIFTY',p:24956,c:+0.47},{sym:'NIFTYPHARMA',p:22840,c:+0.88},
+];
+
+function buildTicker(){
+  const wrap=document.getElementById('tickerInner');
+  PEERS.forEach(it=>{
+    const d=document.createElement('span');d.className='ticker-item';
+    const up=it.c>=0;
+    d.innerHTML='<span style="font-weight:700;color:var(--foreground);">'+it.sym+'</span>'
+      +'<span style="font-weight:600;">\u20b9'+it.p.toLocaleString('en-IN')+'</span>'
+      +'<span style="color:'+(up?'var(--green)':'var(--red)')+'">'+(up?'\u25b2':'\u25bc')+Math.abs(it.c)+'%</span>';
+    wrap.appendChild(d);
+  });
+}
+
+function setupCanvas(id,hPx){
+  const c=document.getElementById(id);if(!c)return null;
+  const dpr=window.devicePixelRatio||1,W=c.parentElement.clientWidth||700,H=hPx||320;
+  c.width=W*dpr;c.height=H*dpr;c.style.width=W+'px';c.style.height=H+'px';
+  const ctx=c.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,W,H);
+  return{ctx,W,H,dpr};
+}
+
+function showTip(elId,html,evt){
+  const el=document.getElementById(elId);el.innerHTML=html;el.style.display='block';
+  const vw=window.innerWidth,vh=window.innerHeight;
+  let x=evt.clientX+14,y=evt.clientY-20;
+  el.style.left='0';el.style.top='0';
+  const rw=el.offsetWidth,rh=el.offsetHeight;
+  if(x+rw>vw-10)x=evt.clientX-rw-14;if(y+rh>vh-10)y=evt.clientY-rh-20;
+  el.style.left=x+'px';el.style.top=y+'px';
+}
+function hideTip(elId){document.getElementById(elId).style.display='none';}
+
+let intradayHorizon='1D';
+function getIntradayData(hor){
+  if(hor==='1D')return{labels:INTRADAY.times,prices:INTRADAY.closes,vols:INTRADAY.vols,isCandle:true,opens:INTRADAY.opens,highs:INTRADAY.highs,lows:INTRADAY.lows,closes:INTRADAY.closes};
+  if(hor==='5D')return{labels:FIVE_DAY.labels,prices:FIVE_DAY.prices,vols:null,isCandle:false};
+  if(hor==='1M')return{labels:MON_LABELS.slice(-6),prices:MON_PRICES.slice(-6),vols:null,isCandle:false};
+  if(hor==='3M')return{labels:MON_LABELS.slice(-9),prices:MON_PRICES.slice(-9),vols:null,isCandle:false};
+  if(hor==='1Y')return{labels:MON_LABELS.slice(-12),prices:MON_PRICES.slice(-12),vols:null,isCandle:false};
+}
+
+function drawIntradayChart(hor){
+  const s=setupCanvas('intradayChart',340);if(!s)return;
+  const{ctx,W,H}=s;
+  const data=getIntradayData(hor);
+  const pad={l:60,r:16,t:16,b:hor==='1D'?80:40};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const prices=data.prices,n=prices.length;
+  const minY=Math.min(...(hor==='1D'?data.lows:prices))*.985;
+  const maxY=Math.max(...(hor==='1D'?data.highs:prices))*1.015;
+  const xp=i=>pad.l+i*(cW/(n-1));
+  const yp=v=>pad.t+cH-(v-minY)/(maxY-minY)*cH;
+  ctx.strokeStyle=GRID();ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+i*cH/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    const v=maxY-i*(maxY-minY)/4;
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText('\u20b9'+v.toFixed(0),pad.l-5,y+4);
+  }
+  ctx.strokeStyle='rgba(239,68,68,.4)';ctx.lineWidth=1;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(pad.l,yp(PREV_CLOSE));ctx.lineTo(W-pad.r,yp(PREV_CLOSE));ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(239,68,68,.7)';ctx.font='9px sans-serif';ctx.textAlign='left';
+  ctx.fillText('Prev Close \u20b9'+PREV_CLOSE.toFixed(2),pad.l+4,yp(PREV_CLOSE)-4);
+  if(hor==='1D'&&data.isCandle){
+    const bw=Math.max(Math.floor(cW/n*.55),1);
+    const volH=30,candleH=cH-volH-4;
+    const ypc=v=>pad.t+candleH-(v-minY)/(maxY-minY)*candleH;
+    const maxVol=Math.max(...data.vols);
+    data.opens.forEach((o,i)=>{
+      const c=data.closes[i],hi=data.highs[i],lo=data.lows[i],up=c>=o;
+      const x=pad.l+i*(cW/(n-1));
+      ctx.strokeStyle=up?'var(--green)':'var(--red)';ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,ypc(hi));ctx.lineTo(x,ypc(lo));ctx.stroke();
+      const oy=ypc(Math.max(o,c)),ch=Math.max(Math.abs(ypc(o)-ypc(c)),1);
+      ctx.fillStyle=up?'rgba(16,185,129,.85)':'rgba(239,68,68,.85)';
+      ctx.fillRect(x-bw/2,oy,bw,ch);
+      const vBarH=data.vols[i]/maxVol*volH;
+      ctx.fillStyle=up?'rgba(16,185,129,.4)':'rgba(239,68,68,.4)';
+      ctx.fillRect(x-bw/2,pad.t+candleH+4+volH-vBarH,bw,vBarH);
+    });
+    const step=Math.max(1,Math.floor(n/8));
+    ctx.fillStyle=FGMID();ctx.font='9px sans-serif';ctx.textAlign='center';
+    data.times.forEach((t,i)=>{if(i%step===0)ctx.fillText(t,pad.l+i*(cW/(n-1)),H-8);});
+  }else{
+    const up=prices[prices.length-1]>=prices[0];
+    const grd=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+    grd.addColorStop(0,up?'rgba(6,182,212,.25)':'rgba(239,68,68,.25)');
+    grd.addColorStop(1,'rgba(0,0,0,.0)');
+    ctx.beginPath();
+    prices.forEach((p,i)=>ctx.lineTo(xp(i),yp(p)));
+    ctx.lineTo(xp(n-1),H-pad.b);ctx.lineTo(xp(0),H-pad.b);ctx.closePath();
+    ctx.fillStyle=grd;ctx.fill();
+    ctx.strokeStyle=up?'var(--teal)':'var(--red)';ctx.lineWidth=2.5;
+    ctx.beginPath();
+    prices.forEach((p,i)=>{if(i===0)ctx.moveTo(xp(0),yp(p));else ctx.lineTo(xp(i),yp(p));});
+    ctx.stroke();
+    const step=Math.max(1,Math.floor(n/6));
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='center';
+    data.labels.forEach((l,i)=>{if(i%step===0||i===n-1)ctx.fillText(l,xp(i),H-10);});
+  }
+  const canvas=document.getElementById('intradayChart');
+  canvas.onmousemove=function(evt){
+    const rect=this.getBoundingClientRect();
+    const mx=evt.clientX-rect.left,my=evt.clientY-rect.top;
+    if(mx<pad.l||mx>W-pad.r||my<pad.t||my>H-pad.b){hideTip('candleTooltip');return;}
+    const idx=Math.round((mx-pad.l)/cW*(n-1));
+    if(idx<0||idx>=n)return;
+    let html='<div style="font-weight:700;margin-bottom:6px;border-bottom:1px solid var(--border);padding-bottom:4px;">'+data.labels[idx]+'</div>';
+    if(hor==='1D'){
+      const up=data.closes[idx]>=data.opens[idx];
+      html+='<div class="candle-stat">'
+        +'<span>Open</span><span>\u20b9'+data.opens[idx]+'</span>'
+        +'<span>High</span><span style="color:var(--green);">\u20b9'+data.highs[idx]+'</span>'
+        +'<span>Low</span><span style="color:var(--red);">\u20b9'+data.lows[idx]+'</span>'
+        +'<span>Close</span><span style="color:'+(up?'var(--green)':'var(--red)')+';">\u20b9'+data.closes[idx]+'</span>'
+        +'<span>Volume</span><span>'+(data.vols[idx]/1000).toFixed(1)+'K</span></div>';
+    }else{
+      const cp=data.prices[idx],pp=idx>0?data.prices[idx-1]:cp;
+      const chg=((cp-pp)/pp*100).toFixed(2);
+      html+='<div class="candle-stat">'
+        +'<span>Price</span><span style="color:var(--teal);">\u20b9'+cp.toLocaleString('en-IN')+'</span>'
+        +'<span>Change</span><span style="color:'+(parseFloat(chg)>=0?'var(--green)':'var(--red)')+';">'
+        +(parseFloat(chg)>=0?'+':'')+chg+'%</span></div>';
+    }
+    showTip('candleTooltip',html,evt);
+    const ch=document.getElementById('intradayCrosshair'),hl=document.getElementById('intradayHorzLine');
+    ch.style.display='block';hl.style.display='block';
+    const px=pad.l+idx*(cW/(n-1));
+    ch.style.left=px+'px';ch.style.top=pad.t+'px';ch.style.height=(H-pad.t-pad.b)+'px';
+    hl.style.top=(hor==='1D'?yp(data.closes[idx]):yp(data.prices[idx]))+'px';
+  };
+  canvas.onmouseleave=()=>{
+    hideTip('candleTooltip');
+    document.getElementById('intradayCrosshair').style.display='none';
+    document.getElementById('intradayHorzLine').style.display='none';
+  };
+}
+
+function switchIntraday(hor,btn){
+  intradayHorizon=hor;
+  document.querySelectorAll('#intradayTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  drawIntradayChart(hor);
+}
+
+let currentFC='1m';
+function drawForecastChart(hor){
+  const s=setupCanvas('forecastChart',360);if(!s)return;
+  const{ctx,W,H}=s;
+  const fcData=FC[hor];
+  const ci=getCI(fcData.fcast,fcData.errors);
+  const fPrices=fcData.fcast;
+  const histShow=24;
+  const hPrices=MON_PRICES.slice(-histShow),hLabels=MON_LABELS.slice(-histShow);
+  const fLabels=futureLabels(fPrices.length);
+  const allP=[...hPrices,...fPrices],allL=[...hLabels,...fLabels];
+  const N=allP.length;
+  const ciAll=[...hPrices.map(v=>({lo:v,hi:v})),...ci];
+  const pad={l:66,r:16,t:20,b:38};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const minY=Math.min(...ciAll.map(c=>c.lo))*.93;
+  const maxY=Math.max(...ciAll.map(c=>c.hi))*1.05;
+  const xp=i=>pad.l+i*(cW/(N-1));
+  const yp=v=>pad.t+cH-(v-minY)/(maxY-minY)*cH;
+  ctx.strokeStyle=GRID();ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+i*cH/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText('\u20b9'+(maxY-i*(maxY-minY)/4).toFixed(0),pad.l-5,y+4);
+  }
+  if(yp(3050)>=pad.t&&yp(2900)<=H-pad.b){
+    ctx.fillStyle='rgba(16,185,129,.07)';
+    ctx.fillRect(pad.l,yp(3050),cW,yp(2900)-yp(3050));
+    ctx.strokeStyle='rgba(16,185,129,.25)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+    ctx.strokeRect(pad.l,yp(3050),cW,yp(2900)-yp(3050));
+  }
+  if(yp(3598)>=pad.t){
+    ctx.fillStyle='rgba(239,68,68,.07)';
+    ctx.fillRect(pad.l,yp(3598),cW,Math.max(yp(3500)-yp(3598),1));
+    ctx.strokeStyle='rgba(239,68,68,.25)';
+    ctx.strokeRect(pad.l,yp(3598),cW,Math.max(yp(3500)-yp(3598),1));
+  }
+  ctx.setLineDash([]);
+  const sepX=xp(histShow-1);
+  ctx.strokeStyle=FGDIM();ctx.lineWidth=1;ctx.setLineDash([5,5]);
+  ctx.beginPath();ctx.moveTo(sepX,pad.t);ctx.lineTo(sepX,H-pad.b);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='center';
+  ctx.fillText('\u25c4 History',sepX-32,pad.t+14);
+  ctx.fillText('Forecast \u25ba',sepX+36,pad.t+14);
+  ctx.beginPath();
+  for(let i=histShow-1;i<N;i++)ctx.lineTo(xp(i),yp(ciAll[i].hi));
+  for(let i=N-1;i>=histShow-1;i--)ctx.lineTo(xp(i),yp(ciAll[i].lo));
+  ctx.closePath();
+  ctx.fillStyle='rgba(59,130,246,.1)';ctx.fill();
+  ctx.strokeStyle='rgba(59,130,246,.25)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+  [ciAll.map(c=>c.hi),ciAll.map(c=>c.lo)].forEach(band=>{
+    ctx.beginPath();
+    for(let i=histShow-1;i<N;i++){if(i===histShow-1)ctx.moveTo(xp(i),yp(band[i]));else ctx.lineTo(xp(i),yp(band[i]));}
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  const grd=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grd.addColorStop(0,'rgba(6,182,212,.18)');grd.addColorStop(1,'rgba(6,182,212,.0)');
+  ctx.beginPath();
+  hPrices.forEach((p,i)=>{if(i===0)ctx.moveTo(xp(i),yp(p));else ctx.lineTo(xp(i),yp(p));});
+  ctx.lineTo(xp(histShow-1),H-pad.b);ctx.lineTo(xp(0),H-pad.b);ctx.closePath();
+  ctx.fillStyle=grd;ctx.fill();
+  ctx.strokeStyle='var(--teal)';ctx.lineWidth=2.5;
+  ctx.beginPath();
+  hPrices.forEach((p,i)=>{if(i===0)ctx.moveTo(xp(i),yp(p));else ctx.lineTo(xp(i),yp(p));});
+  ctx.stroke();
+  ctx.strokeStyle='#3b82f6';ctx.lineWidth=2.5;ctx.setLineDash([7,4]);
+  ctx.beginPath();
+  ctx.moveTo(xp(histShow-1),yp(hPrices[histShow-1]));
+  for(let i=histShow;i<N;i++)ctx.lineTo(xp(i),yp(allP[i]));
+  ctx.stroke();ctx.setLineDash([]);
+  const lastX=xp(N-1),lastY=yp(allP[N-1]);
+  ctx.fillStyle='#3b82f6';ctx.beginPath();ctx.arc(lastX,lastY,5,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.7)';ctx.lineWidth=2;ctx.beginPath();ctx.arc(lastX,lastY,5,0,Math.PI*2);ctx.stroke();
+  ctx.fillStyle='#3b82f6';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+  ctx.fillText('\u20b9'+allP[N-1].toFixed(0),lastX+8,lastY-4);
+  ctx.fillStyle='var(--teal)';
+  ctx.beginPath();ctx.arc(xp(histShow-1),yp(hPrices[histShow-1]),7,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.8)';ctx.lineWidth=2.5;
+  ctx.beginPath();ctx.arc(xp(histShow-1),yp(hPrices[histShow-1]),7,0,Math.PI*2);ctx.stroke();
+  ctx.font='9.5px sans-serif';ctx.textAlign='left';
+  if(yp(2975)+10<H-pad.b){ctx.fillStyle='rgba(16,185,129,.9)';ctx.fillText('Support \u20b92,900\u20133,050',pad.l+4,yp(2975)+10);}
+  if(yp(3549)-4>pad.t&&yp(3598)>=pad.t){ctx.fillStyle='rgba(239,68,68,.9)';ctx.fillText('Resistance \u20b93,500\u20133,598',pad.l+4,yp(3549)-4);}
+  const step=Math.max(1,Math.floor(N/8));
+  ctx.fillStyle=FGMID();ctx.font='9.5px sans-serif';ctx.textAlign='center';
+  allL.forEach((l,i)=>{if(i%step===0||i===N-1)ctx.fillText(l,xp(i),H-6);});
+  const canvas=document.getElementById('forecastChart');
+  canvas.onmousemove=function(evt){
+    const rect=this.getBoundingClientRect(),mx=evt.clientX-rect.left;
+    if(mx<pad.l||mx>W-pad.r){hideTip('chartTooltip');return;}
+    const idx=Math.round((mx-pad.l)/cW*(N-1));
+    if(idx<0||idx>=N)return;
+    const isForecast=idx>=histShow,ci_=ciAll[idx];
+    const html='<div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">'+allL[idx]+'</div>'
+      +'<div class="candle-stat">'
+      +'<span>Price</span><span style="color:'+(isForecast?'#3b82f6':'var(--teal)')+';">\u20b9'+allP[idx].toFixed(0)+'</span>'
+      +(isForecast?'<span>95% CI Low</span><span style="color:var(--green);">\u20b9'+ci_.lo.toFixed(0)+'</span><span>95% CI High</span><span style="color:var(--red);">\u20b9'+ci_.hi.toFixed(0)+'</span>':'')
+      +'<span>Type</span><span>'+(isForecast?'\ud83d\udd2e Forecast':'\ud83d\udcca Historical')+'</span></div>';
+    showTip('chartTooltip',html,evt);
+  };
+  canvas.onmouseleave=()=>hideTip('chartTooltip');
+}
+
+function switchForecast(hor,btn){
+  currentFC=hor;
+  document.querySelectorAll('#forecastTabs .tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  drawForecastChart(hor);
+  renderForecastTable();
+}
+
+function drawQuarterChart(){
+  const s=setupCanvas('quarterChart',240);if(!s)return;
+  const{ctx,W,H}=s;
+  const pad={l:56,r:10,t:14,b:48};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const n=Q_LABS.length,bw=Math.max(Math.floor(cW/n*.34),3);
+  const minV=0,maxV=Math.max(...Q_SAL)*1.1;
+  const yp=v=>pad.t+cH-(v-minV)/(maxV-minV)*cH;
+  ctx.strokeStyle=GRID();ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+i*cH/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxV-i*(maxV-minV)/4).toFixed(0),pad.l-4,y+4);
+  }
+  Q_LABS.forEach((l,i)=>{
+    const x=pad.l+(i+.5)*cW/n;
+    const syT=yp(Q_SAL[i]),syH=Math.abs(yp(0)-yp(Q_SAL[i]));
+    const sg=ctx.createLinearGradient(0,syT,0,syT+syH);
+    sg.addColorStop(0,'rgba(6,182,212,.9)');sg.addColorStop(1,'rgba(6,182,212,.4)');
+    ctx.fillStyle=sg;ctx.fillRect(x-bw-1,syT,bw,syH);
+    const pyT=yp(Q_PRF[i]),pyH=Math.abs(yp(0)-yp(Q_PRF[i]));
+    const pg=ctx.createLinearGradient(0,pyT,0,pyT+pyH);
+    pg.addColorStop(0,'rgba(16,185,129,.95)');pg.addColorStop(1,'rgba(16,185,129,.4)');
+    ctx.fillStyle=pg;ctx.fillRect(x+1,pyT,bw,pyH);
+    ctx.save();ctx.translate(x,H-pad.b+4);ctx.rotate(-Math.PI/3.5);
+    ctx.fillStyle=FGMID();ctx.font='9px sans-serif';ctx.textAlign='right';
+    ctx.fillText(l,0,0);ctx.restore();
+  });
+  ctx.fillStyle='rgba(6,182,212,.8)';ctx.fillRect(pad.l,2,12,8);
+  ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('Revenue',pad.l+15,10);
+  ctx.fillStyle='rgba(16,185,129,.8)';ctx.fillRect(pad.l+72,2,12,8);ctx.fillText('Net Profit',pad.l+87,10);
+  const canvas=document.getElementById('quarterChart');
+  canvas.onmousemove=function(evt){
+    const rect=this.getBoundingClientRect(),mx=evt.clientX-rect.left;
+    if(mx<pad.l||mx>W-pad.r){hideTip('quarterTip');return;}
+    const idx=Math.floor((mx-pad.l)/cW*n);
+    if(idx<0||idx>=n)return;
+    const html='<div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">'+Q_LABS[idx]+'</div>'
+      +'<div class="candle-stat">'
+      +'<span>Revenue</span><span style="color:var(--teal);">\u20b9'+Q_SAL[idx].toLocaleString('en-IN')+' Cr</span>'
+      +'<span>Net Profit</span><span style="color:var(--green);">\u20b9'+Q_PRF[idx]+' Cr</span>'
+      +'<span>Net Margin</span><span>'+(Q_PRF[idx]/Q_SAL[idx]*100).toFixed(1)+'%</span></div>';
+    showTip('quarterTip',html,evt);
+  };
+  canvas.onmouseleave=()=>hideTip('quarterTip');
+}
+
+function drawAnnualChart(){
+  const s=setupCanvas('annualChart',260);if(!s)return;
+  const{ctx,W,H}=s;
+  const pad={l:60,r:10,t:14,b:36};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const n=ANN_YRS.length,bw=Math.max(Math.floor(cW/n*.38),3);
+  const minV=0,maxV=Math.max(...ANN_SAL)*1.08;
+  const yp=v=>pad.t+cH-(v-minV)/(maxV-minV)*cH;
+  ctx.strokeStyle=GRID();ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+i*cH/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxV-i*(maxV-minV)/4)/1000+'K',pad.l-4,y+4);
+  }
+  ANN_YRS.forEach((yr,i)=>{
+    const x=pad.l+(i+.5)*cW/n;
+    const syT=yp(ANN_SAL[i]),syH=Math.abs(yp(0)-yp(ANN_SAL[i]));
+    const sg=ctx.createLinearGradient(0,syT,0,syT+syH);
+    sg.addColorStop(0,'rgba(6,182,212,.85)');sg.addColorStop(1,'rgba(6,182,212,.35)');
+    ctx.fillStyle=sg;ctx.fillRect(x-bw-1,syT,bw*2+2,syH);
+    const pyT=yp(ANN_PRF[i]),pyH=Math.abs(yp(0)-yp(ANN_PRF[i]));
+    const pg=ctx.createLinearGradient(0,pyT,0,pyT+pyH);
+    pg.addColorStop(0,'rgba(16,185,129,.9)');pg.addColorStop(1,'rgba(16,185,129,.3)');
+    ctx.fillStyle=pg;ctx.fillRect(x-bw,pyT,bw*2,pyH);
+    ctx.fillStyle=FGMID();ctx.font='9.5px sans-serif';ctx.textAlign='center';
+    ctx.fillText(yr,x,H-pad.b+13);
+  });
+  ctx.fillStyle='rgba(6,182,212,.8)';ctx.fillRect(pad.l,2,12,8);
+  ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='left';ctx.fillText('Revenue',pad.l+15,10);
+  ctx.fillStyle='rgba(16,185,129,.8)';ctx.fillRect(pad.l+72,2,12,8);ctx.fillText('Net Profit',pad.l+87,10);
+  const canvas=document.getElementById('annualChart');
+  canvas.onmousemove=function(evt){
+    const rect=this.getBoundingClientRect(),mx=evt.clientX-rect.left;
+    if(mx<pad.l||mx>W-pad.r){hideTip('annualTip');return;}
+    const idx=Math.floor((mx-pad.l)/cW*n);
+    if(idx<0||idx>=n)return;
+    const pm=ANN_PRF[idx]/ANN_SAL[idx]*100;
+    const html='<div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">'+ANN_YRS[idx]+'</div>'
+      +'<div class="candle-stat">'
+      +'<span>Revenue</span><span style="color:var(--teal);">\u20b9'+ANN_SAL[idx].toLocaleString('en-IN')+' Cr</span>'
+      +'<span>Net Profit</span><span style="color:var(--green);">\u20b9'+ANN_PRF[idx].toLocaleString('en-IN')+' Cr</span>'
+      +'<span>Net Margin</span><span>'+pm.toFixed(1)+'%</span></div>';
+    showTip('annualTip',html,evt);
+  };
+  canvas.onmouseleave=()=>hideTip('annualTip');
+}
+
+function drawRatioChart(){
+  const s=setupCanvas('ratioChart',230);if(!s)return;
+  const{ctx,W,H}=s;
+  const pad={l:44,r:10,t:10,b:30};
+  const cW=W-pad.l-pad.r,cH=H-pad.t-pad.b;
+  const n=ANN_YRS.length;
+  const allV=[...OPM,...NPM,...ROE];
+  const minV=Math.min(...allV)-3,maxV=Math.max(...allV)+3;
+  const xp=i=>pad.l+i*(cW/(n-1));
+  const yp=v=>pad.t+cH-(v-minV)/(maxV-minV)*cH;
+  ctx.strokeStyle=GRID();ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const y=pad.t+i*cH/4;
+    ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillStyle=FGMID();ctx.font='10px sans-serif';ctx.textAlign='right';
+    ctx.fillText((maxV-i*(maxV-minV)/4).toFixed(0)+'%',pad.l-4,y+4);
+  }
+  [{d:OPM,c:'#06b6d4'},{d:NPM,c:'#3b82f6'},{d:ROE,c:'#8b5cf6'}].forEach(({d,c})=>{
+    ctx.strokeStyle=c;ctx.lineWidth=2.2;
+    ctx.beginPath();d.forEach((v,i)=>{if(i===0)ctx.moveTo(xp(i),yp(v));else ctx.lineTo(xp(i),yp(v));});ctx.stroke();
+    d.forEach((v,i)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(xp(i),yp(v),3.5,0,Math.PI*2);ctx.fill();});
+  });
+  ANN_YRS.forEach((y,i)=>{
+    ctx.fillStyle=FGMID();ctx.font='9.5px sans-serif';ctx.textAlign='center';
+    ctx.fillText(y,xp(i),H-pad.b+13);
+  });
+  const canvas=document.getElementById('ratioChart');
+  canvas.onmousemove=function(evt){
+    const rect=this.getBoundingClientRect(),mx=evt.clientX-rect.left;
+    if(mx<pad.l||mx>W-pad.r){hideTip('ratioTip');return;}
+    const idx=Math.round((mx-pad.l)/cW*(n-1));
+    if(idx<0||idx>=n)return;
+    const html='<div style="font-weight:700;border-bottom:1px solid var(--border);padding-bottom:4px;margin-bottom:6px;">'+ANN_YRS[idx]+'</div>'
+      +'<div class="candle-stat">'
+      +'<span style="color:#06b6d4;">OPM</span><span style="color:#06b6d4;">'+OPM[idx]+'%</span>'
+      +'<span style="color:#3b82f6;">NPM</span><span style="color:#3b82f6;">'+NPM[idx]+'%</span>'
+      +'<span style="color:#8b5cf6;">ROE</span><span style="color:#8b5cf6;">'+ROE[idx]+'%</span></div>';
+    showTip('ratioTip',html,evt);
+  };
+  canvas.onmouseleave=()=>hideTip('ratioTip');
+}
+
+function renderErrorPanel(){
+  const fc=FC['1y'];
+  const rmse=fc.rmse.toFixed(1),mae=fc.mae.toFixed(1),mape=Math.min(fc.mape,99).toFixed(2);
+  const errs=fc.errors;
+  const mu=errs.reduce((a,b)=>a+b,0)/errs.length;
+  const std=Math.sqrt(errs.reduce((a,b)=>a+(b-mu)**2,0)/errs.length);
+  let sc=0;for(let i=1;i<errs.length;i++)if((errs[i]>0)!==(errs[i-1]>0))sc++;
+  const rand=sc/errs.length;
+  const score=Math.max(0,Math.min(100,100-parseFloat(mape)*1.5));
+  const scoreColor=score>70?'var(--green)':score>40?'var(--gold)':'var(--red)';
+  const bar=(lbl,val,max,color,sfx)=>'<div style="margin-bottom:12px;"><div style="display:flex;justify-content:space-between;margin-bottom:4px;"><span style="font-size:12px;color:var(--foreground);">'+lbl+'</span><span style="font-size:12px;font-weight:700;color:'+color+';">'+val+sfx+'</span></div><div class="err-bar"><div class="err-fill" style="width:'+Math.min(parseFloat(val)/max,1)*100+'%;background:linear-gradient(90deg,'+color+'88,'+color+');"></div></div></div>';
+  document.getElementById('errorPanel').innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:16px;">'
+    +[['RMSE','\u20b9'+rmse,'#3b82f6'],['MAE','\u20b9'+mae,'#06b6d4'],['MAPE',mape+'%','#8b5cf6'],['Score',score.toFixed(0)+'/100',scoreColor]].map(([l,v,c])=>'<div style="background:rgba(0,0,0,.06);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center;"><div style="font-size:9.5px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.06em;">'+l+'</div><div style="font-size:18px;font-weight:800;color:'+c+';margin-top:2px;">'+v+'</div></div>').join('')
+    +'</div>'
+    +bar('RMSE \u2014 Root Mean Sq. Error (\u2193 better)',rmse,300,'#3b82f6','')
+    +bar('MAE \u2014 Mean Absolute Error (\u2193 better)',mae,200,'#06b6d4','')
+    +bar('MAPE \u2014 Mean Abs. % Error (\u2193 better)',mape,50,'#8b5cf6','%')
+    +bar('Residual Randomness (\u2191 better)',rand.toFixed(3),1,'#10b981','')
+    +'<div style="background:rgba(6,182,212,.07);border:1px solid rgba(6,182,212,.25);border-radius:8px;padding:10px;margin-top:4px;font-size:11.5px;line-height:1.6;">'
+    +'<span style="font-weight:700;">\ud83e\udd16 Diagnosis:</span> '
+    +'Mean bias <b style="color:'+(Math.abs(mu)<10?'var(--green)':'var(--gold)')+';">'
+    +(Math.abs(mu)<10?'Low':'Moderate')+'</b> (\u03bc='+mu.toFixed(1)+', \u03c3='+std.toFixed(1)+').'
+    +' Residuals <b style="color:'+(rand>.45?'var(--green)':'var(--gold)')+'">'+(rand>.45?'Random \u2713':'Autocorrelated \u26a0')+'</b>. '
+    +(parseFloat(mape)<12?'<span style="color:var(--green);">\u2713 Good short-term accuracy</span>':'<span style="color:var(--gold);">\u26a0 Higher uncertainty at long horizons</span>')
+    +'</div>';
+}
+
+function renderForecastTable(){
+  const horizons=[{lbl:'1 Month',key:'1m'},{lbl:'6 Months',key:'6m'},{lbl:'1 Year',key:'1y'},{lbl:'3 Years',key:'3y'}];
+  const cur=MON_PRICES[MON_PRICES.length-1];
+  const rows=horizons.map(h=>{
+    const fc=FC[h.key],pred=fc.fcast[fc.fcast.length-1];
+    const ci=getCI(fc.fcast,fc.errors),last=ci[ci.length-1];
+    const chg=(pred-cur)/cur*100,up=pred>=cur;
+    return '<tr><td><span style="font-weight:700;">'+h.lbl+'</span></td>'
+      +'<td><span style="font-weight:800;color:var(--teal);">\u20b9'+pred.toFixed(0)+'</span></td>'
+      +'<td><span class="'+(up?'up':'dn')+'" style="font-weight:700;">'+(up?'\u25b2':'\u25bc')+Math.abs(chg).toFixed(1)+'%</span></td>'
+      +'<td style="font-size:11px;color:var(--muted-foreground);">\u20b9'+last.lo.toFixed(0)+'\u2013\u20b9'+last.hi.toFixed(0)+'</td>'
+      +'<td><span class="sig '+(up?'sig-bull':'sig-bear')+'">'+(up?'BULLISH':'BEARISH')+'</span></td></tr>';
+  });
+  document.getElementById('forecastTable').innerHTML=
+    '<table class="ftable"><thead><tr><th>Horizon</th><th>Target</th><th>\u0394%</th><th>95% CI</th><th>Signal</th></tr></thead>'
+    +'<tbody>'+rows.join('')+'</tbody></table>'
+    +'<div style="margin-top:12px;padding:10px 12px;background:rgba(6,182,212,.08);border:1px solid rgba(6,182,212,.25);border-radius:8px;font-size:11.5px;color:var(--muted-foreground);line-height:1.6;">'
+    +'Current: <strong style="color:var(--teal);">\u20b9'+cur.toFixed(2)+'</strong> \u00b7 Model: ARIMA(2,1,2) \u00b7 CI widens at longer horizons. Past performance \u2260 future results.</div>';
+}
+
+function updateTicker(){
+  const wrap=document.getElementById('tickerInner');
+  wrap.innerHTML='';
+  const all=[{sym:'TORNTPHARM',p:livePrice,c:(livePrice-PREV_CLOSE)/PREV_CLOSE*100},...PEERS,...PEERS];
+  all.forEach(it=>{
+    const d=document.createElement('span');d.className='ticker-item';
+    const up=it.c>=0;
+    d.innerHTML='<span style="font-weight:700;color:var(--foreground);">'+it.sym+'</span> '
+      +'<span style="font-weight:600;">\u20b9'+it.p.toLocaleString('en-IN',{maximumFractionDigits:0})+'</span> '
+      +'<span style="color:'+(up?'var(--green)':'var(--red)')+'">'+(up?'\u25b2':'\u25bc')+Math.abs(it.c).toFixed(2)+'%</span>';
+    wrap.appendChild(d);
+  });
+}
+
+function drawAll(){
+  drawIntradayChart(intradayHorizon);
+  drawForecastChart(currentFC);
+  drawQuarterChart();
+  drawAnnualChart();
+  drawRatioChart();
+}
+
+window.addEventListener('load',()=>{
+  setupMarketStatus();
+  buildTicker();
+  renderErrorPanel();
+  renderForecastTable();
+  drawAll();
+  setInterval(()=>{updateLivePrice();updateTicker();},2000);
+  setInterval(()=>{if(intradayHorizon==='1D')drawIntradayChart('1D');},10000);
+});
+
+window.addEventListener('resize',()=>{
+  clearTimeout(window._resizeT);
+  window._resizeT=setTimeout(drawAll,200);
+});
+</script>
+</body>
+</html>
